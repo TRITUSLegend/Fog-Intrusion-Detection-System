@@ -1,0 +1,10 @@
+# ============================================
+#  Python Dependencies
+#  Fog-Assisted Intrusion Detection System
+# ============================================
+# Install with:  pip install -r requirements.txt
+
+opencv-python>=4.5.0
+numpy>=1.21.0
+pyserial>=3.5
+paho-mqtt>=1.6.0

@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local Data & Logs
+*.csv
+img/intrusion_*.jpg
+
+# Editor / IDE
+.vscode/
+.idea/
+.gemini/
+
+# Virtual Environments
+venv/
+.venv/
+env/
+
+# OS specific
+.DS_Store
+Thumbs.db
