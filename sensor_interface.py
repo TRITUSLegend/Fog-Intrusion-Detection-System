@@ -7,7 +7,9 @@ class SensorInterface:
         self.port = port
         self.baudrate = baudrate
         self.serial_conn = None
+        self.buffer = "" # Add internal buffer for partial lines
         self.last_attempt_time = 0.0
+        self.last_packet_time = 0.0 # Time we last got a valid JSON
         self.connect_interval = 2.0  # seconds between reconnect attempts
         self.connect()
 
@@ -27,50 +29,71 @@ class SensorInterface:
                 
             # Use timeout=0 so normal reads don't block the video either
             self.serial_conn = serial.Serial(self.port, self.baudrate, timeout=0)
-            print(f"[INFO] Connected to ESP32 on {self.port} at {self.baudrate} baud.")
+            self.buffer = "" # Clear buffer on reconnect
+            print(f"[INFO] Serial: Connected to {self.port} at {self.baudrate} baud.")
             return True
         except serial.SerialException as e:
-            # We don't print on every failure to prevent terminal spam
+            print(f"[ERROR] Serial connection failed on {self.port}: {e}")
+            if "PermissionError" in str(e):
+                print("        TIP: Is the Arduino Serial Monitor still open? Please close it.")
             self.serial_conn = None
             return False
+
     def read_data(self):
         """
-        Reads one complete line from the serial buffer, parses JSON.
+        Reads ALL available data from the serial buffer, finds the LATEST complete JSON.
         Returns:
-            dict: {"pir": int, "ldr": int} or None if failed.
+            dict: {"pir": int, "ldr": int} or None if failed to find a valid packet.
         """
         if not self.serial_conn or not self.serial_conn.is_open:
-            self.connect()
-            if not self.serial_conn:
+            if not self.connect():
                 return None
 
+        latest_packet = None
+
         try:
-            if self.serial_conn.in_waiting > 0:
-                line = self.serial_conn.readline().decode('utf-8').strip()
-                if not line:
-                    return None
+            # 1. Read everything currently in the serial driver's buffer
+            chunk = self.serial_conn.read_all().decode('utf-8', errors='ignore')
+            if chunk:
+                self.buffer += chunk
+
+            # 2. Extract all complete lines from our local buffer
+            if "\n" in self.buffer:
+                lines = self.buffer.split("\n")
                 
-                # Try to parse the JSON format
-                data = json.loads(line)
-                
-                # Validate contents
-                pir_val = data.get("pir")
-                ldr_val = data.get("ldr")
-                
-                if pir_val not in (0, 1) or not (0 <= ldr_val <= 1023):
-                    print(f"[WARN] Invalid sensor data values: {data}")
-                    return None
-                    
-                return {"pir": pir_val, "ldr": ldr_val}
+                # The last element in 'lines' is either empty (if buffer ended in \n)
+                # or a partial line (if it didn't). Keep it for the next call.
+                self.buffer = lines.pop()
+
+                # 3. Iterate through all complete lines and try to find the newest valid JSON
+                # We iterate backwards (newest first) for efficiency
+                for line in reversed(lines):
+                    line = line.strip()
+                    if not line:
+                        continue
+                        
+                    try:
+                        data = json.loads(line)
+                        pir_val = data.get("pir")
+                        ldr_val = data.get("ldr")
+                        
+                        # Validate the JSON structure
+                        if pir_val is not None and ldr_val is not None:
+                            latest_packet = {"pir": pir_val, "ldr": ldr_val}
+                            self.last_packet_time = time.time()
+                            break # Found the latest valid one, skip older ones
+                    except json.JSONDecodeError as jde:
+                        # Only log if it looks like it was meant to be JSON
+                        if "{" in line:
+                            print(f"[DEBUG] JSON Decode Error on line: {line[:50]}... Error: {jde}")
+                        continue 
             
-        except json.JSONDecodeError:
-            pass # Handle corrupted/partial JSON gracefully by skipping
         except (serial.SerialException, UnicodeDecodeError) as e:
             print(f"[ERROR] Serial read error: {e}")
             self.serial_conn.close()
             self.serial_conn = None
             
-        return None
+        return latest_packet
 
     def close(self):
         if self.serial_conn and self.serial_conn.is_open:

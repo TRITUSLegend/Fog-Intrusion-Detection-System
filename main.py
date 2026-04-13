@@ -40,9 +40,9 @@ def main():
     frame_count = 0
     fps = 0.0
     
-    # Cache sensor values to avoid skipping frames if ESP32 disconnects
-    pir_val = 0
-    ldr_val = 1000
+    # Initialize sensor values to -1 (indicating no data yet)
+    pir_val = -1
+    ldr_val = -1
 
     try:
         while True:
@@ -62,12 +62,15 @@ def main():
             if frame is None:
                 continue
 
-            # ── 6 & 7. MACF Fusion ──
-            # Compute final IPS based on PIR, LDR, and C_vid
-            _, _, ips = macf.compute_fusion(pir_val, ldr_val, c_vid)
-
-            # ── 7.5 Human Detection & Dashboard Updates ──
+            # ── 6. Human Detection ──
             detections, annotated_frame, people_count = human_detector.detect(frame)
+            
+            # Extract max human confidence for fusion
+            c_human = max([d['confidence'] for d in detections]) if detections else 0.0
+
+            # ── 7. MACF Fusion ──
+            # Compute final IPS based on PIR, LDR, C_vid, and C_human
+            _, _, ips = macf.compute_fusion(pir_val, ldr_val, c_vid, c_human)
 
             # Live MQTT Status updates (unconditional reporting for dashboard)
             mqtt_pub.publish_motion(pir_val == 1)
@@ -95,12 +98,19 @@ def main():
             else:
                 color = (0, 255, 0) # Green
 
-            # Overlay info
-            cv2.putText(display_frame, f"System: MACF | People: {people_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-            cv2.putText(display_frame, f"IPS Score: {ips:.2f}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.8, color, 2)
-            cv2.putText(display_frame, f"Status: Active", (10, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-            cv2.putText(display_frame, f"Motion Pixels: {motion_pixels}", (10, config.FRAME_HEIGHT - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
-            cv2.putText(display_frame, f"PIR: {pir_val} | LDR: {ldr_val} | FPS: {fps:.1f}", (10, config.FRAME_HEIGHT - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
+            # Overlay info (Reduced scale to prevent truncation)
+            # Sensor connectivity status check
+            sensor_online = (time.time() - sensor_iface.last_packet_time) < 3.0
+            status_text = "Status: Active" if sensor_online else "Status: SENSOR OFFLINE"
+            status_color = color if sensor_online else (0, 0, 255)
+
+            cv2.putText(display_frame, f"MACF System | People Count: {people_count}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+            cv2.putText(display_frame, f"IPS Score: {ips:.2f}", (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+            cv2.putText(display_frame, status_text, (10, 100), cv2.FONT_HERSHEY_SIMPLEX, 0.6, status_color, 2)
+            
+            # Bottom Telemetry
+            cv2.putText(display_frame, f"Motion Pixels: {motion_pixels}", (10, config.FRAME_HEIGHT - 30), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+            cv2.putText(display_frame, f"PIR: {pir_val} | LDR: {ldr_val} | FPS: {fps:.1f}", (10, config.FRAME_HEIGHT - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.4, (255, 255, 0), 1)
 
             # ── 8. Alert Classification & Logging / Network ──
             # Pass the annotated frame for evidence capture

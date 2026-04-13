@@ -19,7 +19,7 @@ class MACFFusion:
         tau_adaptive = self.tau_base * (1.0 - 0.4 * erf)
         return int(max(0, tau_adaptive))
 
-    def compute_fusion(self, pir_val, ldr_val, c_vid):
+    def compute_fusion(self, pir_val, ldr_val, c_vid, c_human=0.0):
         """
         Fuses multimodal sensor values into an Intrusion Probability Score (IPS).
         Returns ERF, tau_adaptive, and IPS.
@@ -34,10 +34,14 @@ class MACFFusion:
         c_pir = 1.0 if pir_val == 1 else 0.0
 
         # Step 6: Intrusion Probability Fusion
-        ips_raw = (0.50 * c_pir) + (0.20 * erf) + (0.30 * c_vid)
+        # Optimal Weights: PIR(45%), Human(35%), ERF(10%), Video(10%)
+        # This balance ensures PIR + Human = 0.80 (Intrusion Alert), 
+        # while Human alone = 0.35-0.45 (Monitoring).
+        ips_raw = (0.45 * c_pir) + (0.35 * c_human) + (0.10 * erf) + (0.10 * c_vid)
 
         # Step 7: Temporal Smoothing
-        if c_pir == 0.0 and c_vid < 0.1:
+        # If no PIR and no vision confirmation, decay IPS faster
+        if c_pir == 0.0 and c_vid < 0.1 and c_human < 0.1:
             self.IPS = self.IPS * (1.0 - 0.40)
         else:
             self.IPS = self.IPS * (1.0 - 0.40) + ips_raw * 0.40

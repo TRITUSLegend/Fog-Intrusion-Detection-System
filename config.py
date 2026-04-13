@@ -11,7 +11,7 @@ import os
 # ──────────────────────────────────────────────
 #  Serial Communication (ESP32 Edge Layer)
 # ──────────────────────────────────────────────
-SERIAL_PORT = "COM3"          # Change to your ESP32 port (e.g., COM5 on Windows, /dev/ttyUSB0 on Linux)
+SERIAL_PORT = "COM8"          # Change to your ESP32 port (e.g., COM5 on Windows, /dev/ttyUSB0 on Linux)
 SERIAL_BAUD = 115200          # Must match ESP32 baud rate
 
 # ──────────────────────────────────────────────
@@ -29,7 +29,7 @@ PROTOTXT_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.prototxt")
 CAFFEMODEL_PATH = os.path.join(MODEL_DIR, "MobileNetSSD_deploy.caffemodel")
 
 # Detection confidence threshold (0.0 - 1.0)
-CONFIDENCE_THRESHOLD = 0.95
+CONFIDENCE_THRESHOLD = 0.60
 
 # ──────────────────────────────────────────────
 #  Intrusion Image Saving

@@ -143,7 +143,7 @@ See [Wiring Diagram](#esp32-wiring-diagram) below.
 Edit `config.py` to match your setup:
 
 ```python
-SERIAL_PORT = "COM3"      # ← Change to your ESP32 port
+SERIAL_PORT = "COM8"      # ← Change to match your ESP32 (e.g., COM3, COM4)
 CAMERA_INDEX = 0           # ← Change if using external webcam
 MQTT_BROKER = "localhost"  # ← Change if broker is on another machine
 ```
@@ -153,10 +153,12 @@ MQTT_BROKER = "localhost"  # ← Change if broker is on another machine
 1. Download from [mqtt-explorer.com](http://mqtt-explorer.com/)
 2. Open MQTT Explorer
 3. Connect to `localhost:1883`
-4. You will see live data on topics:
-   - `fog/occupancy`
-   - `fog/intrusion`
-   - `fog/sensor`
+4. You will see live, structured data on topics:
+   - `fog/edge/motion`
+   - `fog/edge/environment`
+   - `fog/detection/occupancy`
+   - `fog/detection/intrusion`
+   - `fog/system/status`
 
 If you don't have a broker installed, install **Mosquitto**:
 ```bash
@@ -191,35 +193,44 @@ python main.py
 
 ---
 
-## MQTT Cloud Dashboard
+The fog node publishes JSON data to these hierarchical MQTT topics:
 
-The fog node publishes JSON data to these MQTT topics:
-
-### `fog/sensor` – Raw Sensor Data
+### `fog/edge/motion`
 ```json
 {
-    "motion_detected": true,
-    "light_level": 2048,
-    "timestamp": "2026-04-07T17:30:00.000000"
+  "motion_detected": true,
+  "status": "MOTION DETECTED",
+  "timestamp": "17:30:00 07-04-2026"
 }
 ```
 
-### `fog/occupancy` – People Count
+### `fog/edge/environment`
 ```json
 {
-    "people_count": 3,
-    "timestamp": "2026-04-07T17:30:00.000000",
-    "status": "occupied"
+  "light_level_raw": 1000,
+  "light_condition": "Day",
+  "description": "Day (LDR: 1000)",
+  "timestamp": "17:30:00 07-04-2026"
 }
 ```
 
-### `fog/intrusion` – Intrusion Alert
+### `fog/detection/occupancy`
 ```json
 {
-    "alert": "INTRUSION_DETECTED",
-    "intruder_count": 2,
-    "timestamp": "2026-04-07T17:30:00.000000",
-    "image_saved": "img/17-30-00_07-04-2026.jpg"
+  "people_count": 2,
+  "status": "2 person(s) detected",
+  "zone_status": "OCCUPIED",
+  "timestamp": "17:30:00 07-04-2026"
+}
+```
+
+### `fog/detection/intrusion`
+```json
+{
+  "Timestamp": "2026-04-07T17:30:00",
+  "IPS": 0.85,
+  "Alert": "INTRUSION CONFIRMED",
+  "Image_path": "img/intrusion_20260407_173000.jpg"
 }
 ```
 
@@ -285,7 +296,9 @@ LDR Module:
 | Problem | Solution |
 |---------|----------|
 | Camera not opening | Check `CAMERA_INDEX` in `config.py`. Try `1` for external webcam |
-| Serial port error | Verify the COM port in Device Manager. Update `SERIAL_PORT` |
+| Serial port error | Verify COM port in Device Manager. **Close Arduino Serial Monitor** |
+| Sensor Offline Status | Ensure ESP32 is plugged in and running the correct firmware |
+| PIR/LDR Stuck at -1 | Connectivity issue. Check USB cable and `SERIAL_PORT` in `config.py` |
 | Model not found | Run `python download_model.py` to download model files |
 | MQTT not connecting | Ensure Mosquitto broker is running. Check `MQTT_BROKER` setting |
 | Low FPS | Close other applications. The model is optimized for CPU |
